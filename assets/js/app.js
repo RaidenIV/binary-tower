@@ -43,6 +43,9 @@ const state = {
   lastHistoryUpdateTimestamp: 0,
   lastRotationControlSyncTimestamp: 0,
   binaryStreamTime: 0,
+  binaryStreamTargetTime: 0,
+  binaryStreamFrameInterval: 0,
+  binaryStreamClockValid: false,
   lastBinaryStreamTimestamp: 0,
   binaryDeletionFrameDelta: 0,
   binaryDeletedNumbers: new Set(),
@@ -407,6 +410,84 @@ function resetSmoothPlaybackTo(time = audio.currentTime || 0) {
   state.smoothPlaybackTime = Number.isFinite(time) ? time : 0;
   state.smoothPlaybackValid = false;
   state.smoothPlaybackLastTimestamp = 0;
+}
+
+function resetBinaryStreamClock(time = 0) {
+  const normalizedTime = Number.isFinite(time) ? Math.max(0, time) : 0;
+  state.binaryStreamTime = normalizedTime;
+  state.binaryStreamTargetTime = normalizedTime;
+  state.binaryStreamFrameInterval = 0;
+  state.binaryStreamClockValid = false;
+  state.lastBinaryStreamTimestamp = 0;
+  state.binaryDeletionFrameDelta = 0;
+}
+
+// Keep the binary rain moving at an even visual cadence when requestAnimationFrame
+// arrives unevenly. The target clock still follows real elapsed time, while the
+// displayed clock advances at the measured refresh cadence and catches up over
+// several frames instead of making one large visible jump after a delayed frame.
+function updateBinaryStreamClock(timestamp, isPlaying) {
+  if (!isPlaying) {
+    state.binaryStreamTargetTime = state.binaryStreamTime;
+    state.binaryStreamClockValid = false;
+    state.lastBinaryStreamTimestamp = timestamp;
+    state.binaryDeletionFrameDelta = 0;
+    return;
+  }
+
+  if (
+    !state.binaryStreamClockValid ||
+    state.lastBinaryStreamTimestamp <= 0
+  ) {
+    state.binaryStreamClockValid = true;
+    state.binaryStreamTargetTime = state.binaryStreamTime;
+    state.binaryStreamFrameInterval = 0;
+    state.lastBinaryStreamTimestamp = timestamp;
+    state.binaryDeletionFrameDelta = 0;
+    return;
+  }
+
+  const rawDelta = clamp(
+    (timestamp - state.lastBinaryStreamTimestamp) / 1000,
+    0,
+    0.25
+  );
+  state.lastBinaryStreamTimestamp = timestamp;
+
+  if (rawDelta <= 0) {
+    state.binaryDeletionFrameDelta = 0;
+    return;
+  }
+
+  state.binaryStreamTargetTime += rawDelta;
+
+  // Estimate the normal refresh interval without letting an isolated delayed
+  // frame redefine the cadence. This supports 30/60/120/144 Hz displays.
+  const observedInterval = clamp(rawDelta, 1 / 240, 1 / 24);
+  if (state.binaryStreamFrameInterval <= 0) {
+    state.binaryStreamFrameInterval = observedInterval;
+  } else {
+    const intervalBlend = 1 - Math.exp(-rawDelta * 4);
+    state.binaryStreamFrameInterval +=
+      (observedInterval - state.binaryStreamFrameInterval) * intervalBlend;
+  }
+
+  const remaining = Math.max(
+    0,
+    state.binaryStreamTargetTime - state.binaryStreamTime
+  );
+  const cadenceStep = Math.min(
+    remaining,
+    state.binaryStreamFrameInterval
+  );
+  const catchUpStep = Math.min(
+    Math.max(0, remaining - cadenceStep),
+    state.binaryStreamFrameInterval * 0.12
+  );
+  const visualDelta = Math.min(remaining, cadenceStep + catchUpStep);
+
+  state.binaryStreamTime += visualDelta;
+  state.binaryDeletionFrameDelta = visualDelta;
 }
 
 function getLoopZoomRange() {
@@ -1225,8 +1306,7 @@ async function loadAudioFile(file) {
   drawLoopWaveform();
   drawLoopMinimap();
   setLoopStatus("Analyzing audio before creating the loop…", "active");
-  state.binaryStreamTime = 0;
-  state.lastBinaryStreamTimestamp = 0;
+  resetBinaryStreamClock(0);
   state.binaryDeletedNumbers.clear();
   resetHistory();
 
@@ -1370,6 +1450,9 @@ function resetVisualizerToDefaults() {
     lastHistoryUpdateTimestamp: 0,
     lastRotationControlSyncTimestamp: 0,
     binaryStreamTime: 0,
+    binaryStreamTargetTime: 0,
+    binaryStreamFrameInterval: 0,
+    binaryStreamClockValid: false,
     lastBinaryStreamTimestamp: 0,
     binaryDeletionFrameDelta: 0,
     hudSpectrumBuffer: null,
@@ -1594,8 +1677,7 @@ function resetBinarySectionToDefaults() {
   setControlAndDispatch(elements.binaryDeletion, defaults.binaryDeletion);
   setControlAndDispatch(elements.binaryDeletionSpeed, defaults.binaryDeletionSpeed);
   state.binaryDeletedNumbers.clear();
-  state.binaryStreamTime = 0;
-  state.lastBinaryStreamTimestamp = 0;
+  resetBinaryStreamClock(0);
   setStatus("DEFAULTS RESTORED / BINARY NUMBERS / 13.JSON");
 }
 
@@ -1675,7 +1757,7 @@ function resetVisualizationSectionToDefaults() {
   elements.lineColor.dispatchEvent(new Event("input", { bubbles: true }));
 
   state.binaryDeletedNumbers.clear();
-  state.binaryStreamTime = 0;
+  resetBinaryStreamClock(0);
   state.geometryCache = null;
   state.hudLayer = null;
   resetHistory();
@@ -4375,21 +4457,7 @@ function render(timestamp) {
       : 0;
   state.lastAutoRotateTimestamp = timestamp;
 
-  const binaryStreamDelta =
-    state.lastBinaryStreamTimestamp > 0
-      ? Math.min(
-          0.05,
-          (timestamp - state.lastBinaryStreamTimestamp) / 1000
-        )
-      : 0;
-  state.lastBinaryStreamTimestamp = timestamp;
-
-  if (isPlaying && binaryStreamDelta > 0) {
-    state.binaryStreamTime += binaryStreamDelta;
-    state.binaryDeletionFrameDelta = binaryStreamDelta;
-  } else {
-    state.binaryDeletionFrameDelta = 0;
-  }
+  updateBinaryStreamClock(timestamp, isPlaying);
 
   if (
     state.autoRotate &&
@@ -6464,6 +6532,7 @@ async function exportVideo() {
     rotation: state.rotation,
     frame: state.frame,
     binaryStreamTime: state.binaryStreamTime,
+    binaryStreamFrameInterval: state.binaryStreamFrameInterval,
     binaryDeletionFrameDelta: state.binaryDeletionFrameDelta,
     binaryDeletedNumbers: new Set(state.binaryDeletedNumbers),
     fpsValue: state.fpsValue,
@@ -6865,6 +6934,10 @@ async function exportVideo() {
     state.rotation = saved.rotation;
     state.frame = saved.frame;
     state.binaryStreamTime = saved.binaryStreamTime;
+    state.binaryStreamTargetTime = saved.binaryStreamTime;
+    state.binaryStreamFrameInterval = saved.binaryStreamFrameInterval;
+    state.binaryStreamClockValid = false;
+    state.lastBinaryStreamTimestamp = 0;
     state.binaryDeletionFrameDelta = saved.binaryDeletionFrameDelta;
     state.binaryDeletedNumbers.clear();
     for (const value of saved.binaryDeletedNumbers) {
