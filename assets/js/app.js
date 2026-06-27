@@ -2830,7 +2830,7 @@ function paintHudStaticLayer(layerCtx, width, height) {
   const staticLines = [
     [0, "SYS/BINARY TOWER"],
     [1, displayedHudFileName],
-    [3, `VIEW:${state.aspectRatio.toUpperCase()}`],
+    [3, `VIEW:${state.orientation === "portrait" ? "PORTRAIT" : state.aspectRatio.toUpperCase()}`],
     [5, `MESH ${state.lineCount} / ${fftLabel}`],
     [6, `GAIN VIS ${state.lineHeight.toFixed(2)}x`]
   ];
