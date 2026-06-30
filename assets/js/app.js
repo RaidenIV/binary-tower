@@ -122,14 +122,24 @@ audio.addEventListener("error", () => {
   setStatus("ERROR / AUDIO FORMAT COULD NOT BE DECODED");
 });
 
+function audioTimeFromTimelineValue(value) {
+  const loopRange = state.audioLoop && hasPartialLoopSelection()
+    ? getSelectedLoopRange()
+    : { start: 0, duration: audio.duration };
+  const progress = clamp(Number(value) / 1000, 0, 1);
+  return loopRange.start + progress * loopRange.duration;
+}
+
 elements.timeline.addEventListener("input", () => {
   state.isSeeking = true;
   if (Number.isFinite(audio.duration)) {
-    const previewTime =
-      (Number(elements.timeline.value) / 1000) * audio.duration;
+    const previewTime = audioTimeFromTimelineValue(elements.timeline.value);
+    const loopStart = state.audioLoop && hasPartialLoopSelection()
+      ? getSelectedLoopRange().start
+      : 0;
     audio.currentTime = previewTime;
     resetSmoothPlaybackTo(previewTime);
-    elements.currentTime.textContent = formatTime(previewTime);
+    elements.currentTime.textContent = formatTime(previewTime - loopStart);
     updateLoopPlayhead(previewTime);
     updateHistory(true);
     markRenderDirty();
@@ -138,7 +148,7 @@ elements.timeline.addEventListener("input", () => {
 
 elements.timeline.addEventListener("change", () => {
   if (Number.isFinite(audio.duration)) {
-    audio.currentTime = (Number(elements.timeline.value) / 1000) * audio.duration;
+    audio.currentTime = audioTimeFromTimelineValue(elements.timeline.value);
     resetSmoothPlaybackTo(audio.currentTime);
     updateLoopPlayhead(audio.currentTime);
     // Seeking updates the terrain once. Binary streams use a monotonic

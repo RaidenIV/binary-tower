@@ -1,7 +1,7 @@
 // renderer.js — generated module split of app.js (behavior unchanged)
 import { resetHistory, sampleSpectrogramRow, updateHistory } from "./analysis.js";
 import { FREQUENCY_GRAPH_DB_MAX, FREQUENCY_GRAPH_DB_MIN, FREQUENCY_GRAPH_DB_STEP, FREQUENCY_GRAPH_MAX_HZ, FREQUENCY_GRAPH_MIN_HZ, FREQUENCY_GRAPH_POINT_COUNT, FREQUENCY_POINT_COUNT, audio, canvas, ctx, elements, state } from "./core.js";
-import { enforceSelectedLoop, updateBinaryStreamClock, updateLoopPlayhead } from "./loop.js";
+import { enforceSelectedLoop, getSelectedLoopRange, hasPartialLoopSelection, updateBinaryStreamClock, updateLoopPlayhead } from "./loop.js";
 import { currentPlayheadTime, updateSmoothPlaybackClock } from "./playback.js";
 import { catmullRom, clamp, formatTime, hexToRgb, hexToRgba } from "./utils.js";
 
@@ -1977,10 +1977,19 @@ export function render(timestamp) {
     Number.isFinite(audio.duration) &&
     audio.duration > 0
   ) {
-    elements.timeline.value = String(
-      Math.round((audio.currentTime / audio.duration) * 1000)
+    const loopRange = state.audioLoop && hasPartialLoopSelection()
+      ? getSelectedLoopRange()
+      : { start: 0, end: audio.duration, duration: audio.duration };
+    const relativeTime = clamp(
+      audio.currentTime - loopRange.start,
+      0,
+      Math.max(0, loopRange.duration)
     );
-    elements.currentTime.textContent = formatTime(audio.currentTime);
+    elements.timeline.value = String(
+      Math.round((relativeTime / Math.max(0.001, loopRange.duration)) * 1000)
+    );
+    elements.currentTime.textContent = formatTime(relativeTime);
+    elements.duration.textContent = formatTime(loopRange.duration);
     updateLoopPlayhead(audio.currentTime);
     state.lastTimelineTimestamp = timestamp;
   }
