@@ -21,19 +21,17 @@
 </header>
 <section class="section" data-collapsible-title="File and Playback"><div class="collapsible-header"><h2>File and Playback</h2><div class="collapsible-header-actions"><button aria-controls="sectionContent1" aria-expanded="true" aria-label="Collapse File and Playback" class="collapse-toggle" title="Collapse File and Playback" type="button">−</button></div></div><div class="collapsible-content" id="sectionContent1">
 <div class="button-row file-action-row">
-<div class="file-load-column">
-<label class="file-button">
-          Load Audio File
-          <input accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.flac" id="audioFile" type="file"/>
+<label class="file-button" for="audioFile" id="audioFileButton">
+<span id="audioFileButtonText">Load Audio File</span>
+<span class="audio-load-progress" hidden="" id="audioLoadProgress">
+<progress aria-label="Audio loading progress" id="audioLoadProgressBar" max="100" value="0"></progress>
+<span aria-hidden="true" id="audioLoadProgressPercent">0%</span>
+</span>
+<input accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.flac" id="audioFile" type="file"/>
 </label>
-<div aria-live="polite" class="audio-load-progress-wrap" hidden="" id="audioLoadProgressWrap">
-<progress aria-label="Audio loading progress" class="audio-load-progress" id="audioLoadProgress" max="100" value="0"></progress>
-<span class="audio-load-progress-text" id="audioLoadProgressText">0%</span>
-<span class="audio-load-stage" id="audioLoadStage">Preparing audio…</span>
-</div>
-</div>
 <button class="button" id="resetVisualizer" type="button">Reset</button>
 </div>
+<p aria-live="polite" class="visually-hidden" id="audioLoadStage">Preparing audio…</p>
 <div class="file-name" id="fileName">No audio file loaded</div>
 <div class="button-row playback-action-row">
 <button class="button play-button" disabled="" id="playPause" type="button">▶ Play</button>

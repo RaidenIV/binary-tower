@@ -8,21 +8,34 @@ import { clamp, formatTime, markRenderDirty, setStatus } from "./utils.js";
 
 let audioLoadProgressHideTimer = 0;
 
+function setAudioFileLoading(isLoading) {
+  elements.audioFile.disabled = isLoading;
+  elements.audioFileButton.classList.toggle("is-loading", isLoading);
+  elements.audioFileButtonText.hidden = isLoading;
+  elements.audioLoadProgress.hidden = !isLoading;
+
+  if (isLoading) {
+    elements.audioFileButton.setAttribute("aria-disabled", "true");
+  } else {
+    elements.audioFileButton.removeAttribute("aria-disabled");
+  }
+}
+
 function setAudioLoadProgress(percent, stage = "Loading audio…") {
   window.clearTimeout(audioLoadProgressHideTimer);
   const normalized = clamp(Number(percent) || 0, 0, 100);
-  elements.audioLoadProgressWrap.hidden = false;
-  elements.audioLoadProgress.value = normalized;
-  elements.audioLoadProgressText.textContent = `${Math.round(normalized)}%`;
+  setAudioFileLoading(true);
+  elements.audioLoadProgressBar.value = normalized;
+  elements.audioLoadProgressPercent.textContent = `${Math.round(normalized)}%`;
   elements.audioLoadStage.textContent = stage;
 }
 
 export function hideAudioLoadProgress(delay = 0) {
   window.clearTimeout(audioLoadProgressHideTimer);
   const hide = () => {
-    elements.audioLoadProgressWrap.hidden = true;
-    elements.audioLoadProgress.value = 0;
-    elements.audioLoadProgressText.textContent = "0%";
+    setAudioFileLoading(false);
+    elements.audioLoadProgressBar.value = 0;
+    elements.audioLoadProgressPercent.textContent = "0%";
     elements.audioLoadStage.textContent = "Preparing audio…";
   };
   if (delay > 0) {
@@ -84,7 +97,7 @@ function readAudioFileWithProgress(file, version) {
 }
 
 export async function loadAudioFile(file) {
-  if (!file) return;
+  if (!file || elements.audioFile.disabled) return;
 
   window.clearTimeout(state.reanalysisTimer);
   state.reanalysisTimer = null;
@@ -189,7 +202,6 @@ export async function loadAudioFile(file) {
       `${analyzed.terrain.length} ANALYZED FRAMES`
     );
     setAudioLoadProgress(100, "Audio ready");
-    hideAudioLoadProgress(900);
     markRenderDirty();
   } catch (error) {
     console.error(error);
@@ -214,7 +226,10 @@ export async function loadAudioFile(file) {
     elements.timeline.disabled = true;
     resetHistory();
     setAudioLoadProgress(0, "Audio loading failed");
-    hideAudioLoadProgress(1600);
     setStatus("ERROR / AUDIO FILE COULD NOT BE DECODED OR ANALYZED");
+  } finally {
+    if (version === state.analysisVersion) {
+      hideAudioLoadProgress();
+    }
   }
 }

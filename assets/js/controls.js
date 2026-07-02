@@ -9,9 +9,22 @@ export function initializeCollapsibleSections() {
     const owner = button.closest(".section, .control-cluster");
     if (!owner) return;
 
-    const title = owner.dataset.collapsibleTitle || "section";
     const header = button.closest(".collapsible-header");
-    const titleElement = header?.querySelector("h2, h3");
+    const content = owner.querySelector(":scope > .collapsible-content");
+    if (!header || !content) return;
+
+    const title = owner.dataset.collapsibleTitle || "section";
+    const titleElement = header.querySelector("h2, h3");
+
+    let inner = content.querySelector(":scope > .collapsible-content-inner");
+    if (!inner || content.children.length !== 1) {
+      inner = document.createElement("div");
+      inner.className = "collapsible-content-inner";
+      while (content.firstChild) {
+        inner.appendChild(content.firstChild);
+      }
+      content.appendChild(inner);
+    }
 
     const updateToggleState = (isCollapsed) => {
       button.setAttribute("aria-expanded", String(!isCollapsed));
@@ -21,6 +34,9 @@ export function initializeCollapsibleSections() {
       );
       button.title = `${isCollapsed ? "Expand" : "Collapse"} ${title}`;
       button.textContent = isCollapsed ? "+" : "−";
+      content.setAttribute("aria-hidden", String(isCollapsed));
+      content.inert = isCollapsed;
+
       if (titleElement) {
         titleElement.setAttribute("aria-expanded", String(!isCollapsed));
       }
@@ -29,6 +45,7 @@ export function initializeCollapsibleSections() {
     const toggleSection = () => {
       const isCollapsed = owner.classList.toggle("is-collapsed");
       updateToggleState(isCollapsed);
+
       requestAnimationFrame(() => {
         fitViewport();
         if (!isCollapsed && owner.contains(elements.loopWaveWrap)) {
@@ -37,17 +54,22 @@ export function initializeCollapsibleSections() {
           updateLoopSelectionUi();
         }
       });
+      window.setTimeout(fitViewport, 220);
     };
 
     const startsCollapsed = owner.classList.contains("is-collapsed");
     updateToggleState(startsCollapsed);
+    content.classList.add("is-animated");
     button.addEventListener("click", toggleSection);
 
     if (titleElement) {
       titleElement.setAttribute("role", "button");
       titleElement.setAttribute("tabindex", "0");
       if (button.getAttribute("aria-controls")) {
-        titleElement.setAttribute("aria-controls", button.getAttribute("aria-controls"));
+        titleElement.setAttribute(
+          "aria-controls",
+          button.getAttribute("aria-controls")
+        );
       }
       titleElement.addEventListener("click", toggleSection);
       titleElement.addEventListener("keydown", (event) => {

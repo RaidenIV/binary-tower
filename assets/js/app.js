@@ -198,6 +198,10 @@ elements.viewportFrame.addEventListener(
   elements.viewportFrame.addEventListener(eventName, (event) => {
     event.preventDefault();
     event.stopPropagation();
+    if (elements.audioFile.disabled) {
+      event.dataTransfer.dropEffect = "none";
+      return;
+    }
     elements.viewportFrame.classList.add("is-dragging");
   });
 });
@@ -211,6 +215,8 @@ elements.viewportFrame.addEventListener(
 });
 
 elements.viewportFrame.addEventListener("drop", (event) => {
+  if (elements.audioFile.disabled) return;
+
   const files = Array.from(event.dataTransfer.files || []);
   const audioFile = files.find((file) =>
     file.type.startsWith("audio/") ||

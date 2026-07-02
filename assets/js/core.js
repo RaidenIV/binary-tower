@@ -91,9 +91,11 @@ export const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true 
 
 export const elements = {
   audioFile: document.getElementById("audioFile"),
-  audioLoadProgressWrap: document.getElementById("audioLoadProgressWrap"),
+  audioFileButton: document.getElementById("audioFileButton"),
+  audioFileButtonText: document.getElementById("audioFileButtonText"),
   audioLoadProgress: document.getElementById("audioLoadProgress"),
-  audioLoadProgressText: document.getElementById("audioLoadProgressText"),
+  audioLoadProgressBar: document.getElementById("audioLoadProgressBar"),
+  audioLoadProgressPercent: document.getElementById("audioLoadProgressPercent"),
   audioLoadStage: document.getElementById("audioLoadStage"),
   resetVisualizer: document.getElementById("resetVisualizer"),
   fileName: document.getElementById("fileName"),
