@@ -241,7 +241,7 @@
     }
 
     .file-action-row {
-      grid-template-columns: minmax(0, 1fr);
+      grid-template-columns: 1fr;
       align-items: stretch;
     }
 
