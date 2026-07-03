@@ -240,7 +240,7 @@
       display: none;
     }
 
-    .file-action-row {
+    .button-row.file-action-row {
       grid-template-columns: 1fr;
       align-items: stretch;
     }
