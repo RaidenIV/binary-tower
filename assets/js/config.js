@@ -38,7 +38,7 @@ export const defaults = Object.freeze({
   logoVisible: true,
   logoX: 50,
   logoY: 5,
-  logoSize: 5.5,
+  logoSize: 6.875,
   backgroundColor: "#2424c8",
   lineWidth: 1,
   lineColor: "#dca8d8",
@@ -83,7 +83,7 @@ export const productionViewportPresets = Object.freeze({
     logoVisible: true,
     logoX: 50,
     logoY: 5,
-    logoSize: 5.5
+    logoSize: 6.875
   }),
   square: Object.freeze({
     orientation: "landscape",
@@ -99,7 +99,7 @@ export const productionViewportPresets = Object.freeze({
     logoVisible: true,
     logoX: 50,
     logoY: 5,
-    logoSize: 10
+    logoSize: 12.5
   }),
   portrait: Object.freeze({
     orientation: "portrait",
@@ -115,6 +115,6 @@ export const productionViewportPresets = Object.freeze({
     logoVisible: true,
     logoX: 50,
     logoY: 3.5,
-    logoSize: 14
+    logoSize: 17.5
   })
 });
