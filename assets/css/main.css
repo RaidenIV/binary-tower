@@ -85,7 +85,7 @@
     }
 
     .app.sidebar-collapsed {
-      grid-template-columns: 48px minmax(0, 1fr);
+      grid-template-columns: 60px minmax(0, 1fr);
     }
 
     .panel {
@@ -306,6 +306,7 @@
       align-items: center;
       width: 100%;
       min-width: 0;
+      padding: 0 12px;
       gap: 8px;
     }
 
@@ -1016,7 +1017,8 @@
 
     .app.sidebar-collapsed .sidebar-toggle {
       top: 6px;
-      right: 6px;
+      right: auto;
+      left: 12px;
     }
 
     .sidebar-toggle-icon {
@@ -1358,7 +1360,7 @@
     }
 
     .sidebar-logo {
-      width: min(93.75px, 32.5%);
+      width: min(117.1875px, 40.625%);
       margin: auto auto 6px;
       padding-top: 24px;
       color: #ffffff;
