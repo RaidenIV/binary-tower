@@ -1078,6 +1078,7 @@ export const galaxyLoopController = (() => {
       mc.style.width = mmW + 'px'; mc.style.height = mmH + 'px';
       const mCtx = mc.getContext('2d'); mCtx.scale(dpr, dpr);
       if (popupBuffer) buildPeaks();
+      updateHandles($);
       renderWaveform($); renderMinimap($);
   }
 
