@@ -839,10 +839,12 @@ export const galaxyLoopController = (() => {
       <div class="loop-ctrl-block loop-bars-block">
         <div class="loop-section-label">Loop Length</div>
         <div class="loop-bars-row">
-          <button class="loop-bar-btn" id="popup-bars-decr">−</button>
-          <input class="loop-bars-val" id="popup-bars-val" type="number" min="1" max="999" value="4">
-          <span class="loop-bars-unit">bars</span>
-          <button class="loop-bar-btn" id="popup-bars-incr">+</button>
+          <div class="value-editor has-suffix loop-bars-editor">
+            <input class="value-input loop-bars-val" id="popup-bars-val" type="number" min="1" max="999" value="4" aria-label="Loop Length in Bars Value">
+            <span class="value-suffix loop-bars-unit" aria-hidden="true">bars</span>
+            <button class="value-stepper loop-bars-stepper" id="popup-bars-decr" type="button" aria-label="Decrease Loop Length">−</button>
+            <button class="value-stepper loop-bars-stepper" id="popup-bars-incr" type="button" aria-label="Increase Loop Length">+</button>
+          </div>
         </div>
         <div class="loop-time-info" id="popup-loop-time-info">—</div>
       </div>
@@ -1187,17 +1189,17 @@ export const galaxyLoopController = (() => {
       if (!wc) return;
       const ctx = wc.getContext('2d');
       ctx.clearRect(0, 0, cW, cH);
-      ctx.fillStyle = 'rgba(15,15,23,0.98)'; ctx.fillRect(0, 0, cW, cH);
-      ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 1;
+      ctx.fillStyle = '#080808'; ctx.fillRect(0, 0, cW, cH);
+      ctx.strokeStyle = 'rgba(255,255,255,0.055)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(0, cH / 2); ctx.lineTo(cW, cH / 2); ctx.stroke();
 
       if (!popupPeaks || !popupBuffer) {
-          ctx.fillStyle = 'rgba(168,168,182,0.72)'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
+          ctx.fillStyle = 'rgba(140,140,140,0.80)'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
           ctx.fillText('Loading…', cW / 2, cH / 2 + 4); return;
       }
 
       const lsX = timeToX(popupLoopStart), leX = timeToX(popupLoopEnd);
-      ctx.fillStyle = 'rgba(154,154,165,0.10)'; ctx.fillRect(lsX, 0, leX - lsX, cH);
+      ctx.fillStyle = 'rgba(255,42,26,0.09)'; ctx.fillRect(lsX, 0, leX - lsX, cH);
 
       // Beat grid
       if (popupBpm > 0) {
@@ -1205,11 +1207,11 @@ export const galaxyLoopController = (() => {
           let first = Math.floor(popupZoomStart / bd) * bd, bi = Math.round(first / bd);
           for (let t = first; t < popupZoomEnd; t += bd, bi++) {
               const x = timeToX(t), isBar = (bi % 4 === 0);
-              ctx.strokeStyle = isBar ? 'rgba(154,154,165,0.32)' : 'rgba(154,154,165,0.12)';
+              ctx.strokeStyle = isBar ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.06)';
               ctx.lineWidth = isBar ? 0.8 : 0.5;
               ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cH); ctx.stroke();
               if (isBar) {
-                  ctx.fillStyle = 'rgba(168,168,182,0.55)'; ctx.font = '8px monospace'; ctx.textAlign = 'left';
+                  ctx.fillStyle = 'rgba(140,140,140,0.70)'; ctx.font = '8px monospace'; ctx.textAlign = 'left';
                   ctx.fillText(Math.round(t / (bd * 4)) + 1, x + 2, 10);
               }
           }
@@ -1225,13 +1227,13 @@ export const galaxyLoopController = (() => {
           const h = pk * cH * 0.88, y = (cH - h) / 2;
           const t = xToTime(i), inL = (t >= popupLoopStart && t <= popupLoopEnd);
           ctx.fillStyle = inL
-              ? `rgb(${118 + pk * 55 | 0},${118 + pk * 55 | 0},${128 + pk * 55 | 0})`
-              : `rgb(${48 + pk * 42 | 0},${48 + pk * 42 | 0},${58 + pk * 42 | 0})`;
+              ? `rgba(255,${Math.round(82 + pk * 80)},${Math.round(58 + pk * 48)},${0.62 + pk * 0.34})`
+              : `rgba(120,120,120,${0.22 + pk * 0.45})`;
           ctx.fillRect(i, y, 1, Math.max(0.5, h));
       }
 
       // Loop boundary lines
-      ctx.strokeStyle = 'rgba(180,180,192,0.76)'; ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,42,26,0.92)'; ctx.lineWidth = 1;
       [lsX, leX].forEach(x => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cH); ctx.stroke(); });
   }
 
@@ -1241,7 +1243,7 @@ export const galaxyLoopController = (() => {
       if (!mc) return;
       const ctx = mc.getContext('2d');
       ctx.clearRect(0, 0, mmW, mmH);
-      ctx.fillStyle = 'rgba(15,15,23,0.98)'; ctx.fillRect(0, 0, mmW, mmH);
+      ctx.fillStyle = '#080808'; ctx.fillRect(0, 0, mmW, mmH);
       if (!popupPeaks || !popupBuffer) return;
 
       const N = popupPeaks.length, dur = popupBuffer.duration;
@@ -1250,18 +1252,18 @@ export const galaxyLoopController = (() => {
           const pk = popupPeaks[Math.min(pi, N - 1)] || 0;
           const h = pk * mmH * 0.85, y = (mmH - h) / 2;
           const t = (i / mmW) * dur, inL = (t >= popupLoopStart && t <= popupLoopEnd);
-          ctx.fillStyle = inL ? `rgba(154,154,165,${0.42 + pk * 0.48})` : `rgba(74,74,86,${0.5 + pk * 0.38})`;
+          ctx.fillStyle = inL ? `rgba(255,42,26,${0.35 + pk * 0.5})` : `rgba(130,130,130,${0.18 + pk * 0.42})`;
           ctx.fillRect(i, y, 1, Math.max(0.5, h));
       }
 
       const vL = (popupZoomStart / dur) * mmW, vR = (popupZoomEnd / dur) * mmW;
-      ctx.fillStyle = 'rgba(154,154,165,0.10)'; ctx.fillRect(vL, 0, vR - vL, mmH);
-      ctx.strokeStyle = 'rgba(180,180,192,0.72)'; ctx.lineWidth = 1;
+      ctx.fillStyle = 'rgba(255,255,255,0.045)'; ctx.fillRect(vL, 0, vR - vL, mmH);
+      ctx.strokeStyle = 'rgba(255,255,255,0.42)'; ctx.lineWidth = 1;
       ctx.strokeRect(vL + 0.5, 0.5, Math.max(1, vR - vL - 1), mmH - 1);
 
       if (popupOffset > 0) {
           const px = (popupOffset / dur) * mmW;
-          ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(255,255,255,0.68)'; ctx.lineWidth = 1;
           ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, mmH); ctx.stroke();
       }
   }
@@ -1500,7 +1502,7 @@ export const galaxyLoopController = (() => {
   // ── Volume helpers ──
   function refreshVolSlider($) {
       const s = $('popup-vol-slider');
-      s.style.background = `linear-gradient(90deg,rgba(154,154,165,0.92) ${popupVolume}%,rgba(255,255,255,0.12) ${popupVolume}%)`;
+      s.style.background = `linear-gradient(90deg,rgba(255,42,26,0.92) ${popupVolume}%,rgba(255,255,255,0.12) ${popupVolume}%)`;
   }
   function updateVolIcon($) {
       const btn = $('popup-mute-btn');
