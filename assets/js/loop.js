@@ -546,13 +546,32 @@ async function detectLoopBpm(audioBuffer) {
   return Math.round(bpm);
 }
 
+let cachedLoopBpmBuffer = null;
+let cachedLoopBpmPromise = null;
+
+function getLoopBpmDetection(audioBuffer) {
+  if (cachedLoopBpmBuffer === audioBuffer && cachedLoopBpmPromise) {
+    return cachedLoopBpmPromise;
+  }
+
+  cachedLoopBpmBuffer = audioBuffer;
+  cachedLoopBpmPromise = detectLoopBpm(audioBuffer).catch((error) => {
+    if (cachedLoopBpmBuffer === audioBuffer) {
+      cachedLoopBpmBuffer = null;
+      cachedLoopBpmPromise = null;
+    }
+    throw error;
+  });
+  return cachedLoopBpmPromise;
+}
+
 export async function runLoopBpmDetection() {
   if (!state.decodedAudioBuffer) return;
   const version = ++state.loopBpmDetectionVersion;
   elements.detectLoopBpm.disabled = true;
   setLoopStatus("Detecting BPM from the first 90 seconds…", "active");
   try {
-    const bpm = await detectLoopBpm(state.decodedAudioBuffer);
+    const bpm = await getLoopBpmDetection(state.decodedAudioBuffer);
     if (version !== state.loopBpmDetectionVersion || !state.loopReady) return;
     state.loopBpm = clamp(bpm, 40, 300);
     applyLoopBars();
@@ -841,7 +860,7 @@ export const galaxyLoopController = (() => {
         <div class="loop-bars-row">
           <div class="value-editor has-suffix loop-bars-editor">
             <input class="value-input loop-bars-val" id="popup-bars-val" type="number" min="1" max="999" value="4" aria-label="Loop Length in Bars Value">
-            <span class="value-suffix loop-bars-unit" aria-hidden="true">bars</span>
+            <span class="value-suffix loop-bars-unit" aria-hidden="true">Bars</span>
             <button class="value-stepper loop-bars-stepper" id="popup-bars-decr" type="button" aria-label="Decrease Loop Length">−</button>
             <button class="value-stepper loop-bars-stepper" id="popup-bars-incr" type="button" aria-label="Increase Loop Length">+</button>
           </div>
@@ -1082,7 +1101,7 @@ export const galaxyLoopController = (() => {
           $('popup-t-total').textContent   = fmtTime(popupBuffer.duration);
 
           // BPM detection
-          popupBpm = await detectBPM(popupBuffer);
+          popupBpm = await getLoopBpmDetection(popupBuffer);
           $('popup-bpm-input').value = popupBpm;
           $('popup-bpm-input').disabled = false;
           $('popup-stat-beat').textContent = (60 / popupBpm).toFixed(3) + 's';
@@ -1123,46 +1142,6 @@ export const galaxyLoopController = (() => {
           return;
       }
       $('popup-analyzing').classList.remove('show');
-  }
-
-  // ── BPM detection (same algorithm as bpm_detect.html) ──
-  async function detectBPM(buf) {
-      const sr = buf.sampleRate, maxLen = Math.min(buf.length, sr * 90);
-      const mono = new Float32Array(maxLen);
-      for (let c = 0; c < buf.numberOfChannels; c++) {
-          const ch = buf.getChannelData(c);
-          for (let i = 0; i < maxLen; i++) mono[i] += ch[i];
-      }
-      if (buf.numberOfChannels > 1) for (let i = 0; i < maxLen; i++) mono[i] /= buf.numberOfChannels;
-
-      const offCtx = new OfflineAudioContext(1, maxLen, sr);
-      const ob = offCtx.createBuffer(1, maxLen, sr); ob.getChannelData(0).set(mono);
-      const src = offCtx.createBufferSource(); src.buffer = ob;
-      const lp = offCtx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 180; lp.Q.value = 0.8;
-      src.connect(lp); lp.connect(offCtx.destination); src.start(0);
-      const rend = await offCtx.startRendering();
-      const fd = rend.getChannelData(0);
-
-      const hop = 512, nF = Math.floor(fd.length / hop);
-      const eng = new Float32Array(nF);
-      for (let i = 0; i < nF; i++) {
-          let e = 0, off = i * hop;
-          for (let j = 0; j < hop; j++) { const s = fd[off + j]; e += s * s; }
-          eng[i] = e;
-      }
-      let eM = 0; for (let i = 0; i < nF; i++) if (eng[i] > eM) eM = eng[i];
-      if (eM > 0) for (let i = 0; i < nF; i++) eng[i] /= eM;
-
-      const fps = sr / hop, minL = Math.max(2, Math.floor(fps * 60 / 200)), maxL = Math.ceil(fps * 60 / 60);
-      let bL = minL, bC = -Infinity;
-      for (let lag = minL; lag <= maxL; lag++) {
-          let c = 0; const lim = nF - lag;
-          for (let i = 0; i < lim; i++) c += eng[i] * eng[i + lag];
-          if (c > bC) { bC = c; bL = lag; }
-      }
-      let raw = 60 * fps / bL;
-      while (raw < 80) raw *= 2; while (raw > 160) raw /= 2;
-      return Math.round(raw);
   }
 
   // ── Peaks ──

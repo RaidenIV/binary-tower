@@ -158,7 +158,7 @@ export async function loadAudioFile(file) {
     if (version !== state.analysisVersion) return;
 
     setAudioLoadProgress(70, "Decoding audio…");
-    const decoded = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+    const decoded = await audioContext.decodeAudioData(arrayBuffer);
     if (version !== state.analysisVersion) return;
 
     setAudioLoadProgress(82, "Analyzing frequencies…");

@@ -2,7 +2,7 @@
 import { ANALYSIS_FRAMES_PER_SECOND, FREQUENCY_GRAPH_DB_MAX, FREQUENCY_GRAPH_DB_MIN, FREQUENCY_GRAPH_MAX_HZ, FREQUENCY_GRAPH_MIN_HZ, FREQUENCY_GRAPH_POINT_COUNT, FREQUENCY_POINT_COUNT, MAX_ANALYSIS_FRAMES, MIN_DB_RANGE, TERRAIN_ATTACK_MS, TERRAIN_RELEASE_MS, audio, state } from "./core.js";
 import { hideFftLoadProgress, setFftLoadProgress } from "./loader.js";
 import { currentPlayheadTime } from "./playback.js";
-import { bitReverse, catmullRom, clamp, markRenderDirty, setStatus } from "./utils.js";
+import { catmullRom, clamp, markRenderDirty, setStatus } from "./utils.js";
 
 export function resetHistory() {
   const points = FREQUENCY_POINT_COUNT;
@@ -15,8 +15,7 @@ export function resetHistory() {
   markRenderDirty();
 }
 
-function fftMagnitudes(samples) {
-  const size = samples.length;
+function createFftWorkspace(size) {
   const levels = Math.log2(size);
 
   if (!Number.isInteger(levels)) {
@@ -25,59 +24,143 @@ function fftMagnitudes(samples) {
 
   const real = new Float32Array(size);
   const imaginary = new Float32Array(size);
+  const bitReversedIndices = new Uint32Array(size);
+  const windowValues = new Float64Array(size);
 
   for (let index = 0; index < size; index += 1) {
-    const windowValue =
+    let value = index;
+    let reversed = 0;
+    for (let bit = 0; bit < levels; bit += 1) {
+      reversed = (reversed << 1) | (value & 1);
+      value >>= 1;
+    }
+    bitReversedIndices[index] = reversed;
+    windowValues[index] =
       0.5 - 0.5 * Math.cos((2 * Math.PI * index) / (size - 1));
-    real[bitReverse(index, levels)] = samples[index] * windowValue;
   }
 
+  const stages = [];
   for (let blockSize = 2; blockSize <= size; blockSize *= 2) {
     const halfBlock = blockSize / 2;
     const phaseStep = (-2 * Math.PI) / blockSize;
+    const cosine = new Float64Array(halfBlock);
+    const sine = new Float64Array(halfBlock);
+
+    for (let offset = 0; offset < halfBlock; offset += 1) {
+      const angle = phaseStep * offset;
+      cosine[offset] = Math.cos(angle);
+      sine[offset] = Math.sin(angle);
+    }
+
+    stages.push({ blockSize, halfBlock, cosine, sine });
+  }
+
+  return {
+    size,
+    real,
+    imaginary,
+    bitReversedIndices,
+    windowValues,
+    stages
+  };
+}
+
+function fillFftInput(workspace, channels, channelScale, frameStart) {
+  const {
+    size,
+    real,
+    imaginary,
+    bitReversedIndices,
+    windowValues
+  } = workspace;
+  const sampleCount = channels[0]?.length || 0;
+
+  for (let sampleOffset = 0; sampleOffset < size; sampleOffset += 1) {
+    const sourceIndex = frameStart + sampleOffset;
+    let sample = 0;
+
+    if (sourceIndex >= 0 && sourceIndex < sampleCount) {
+      for (let channelIndex = 0; channelIndex < channels.length; channelIndex += 1) {
+        sample += channels[channelIndex][sourceIndex] * channelScale;
+      }
+    }
+
+    const destinationIndex = bitReversedIndices[sampleOffset];
+    real[destinationIndex] = sample * windowValues[sampleOffset];
+    imaginary[destinationIndex] = 0;
+  }
+}
+
+function runFft(workspace) {
+  const { size, real, imaginary, stages } = workspace;
+
+  for (let stageIndex = 0; stageIndex < stages.length; stageIndex += 1) {
+    const { blockSize, halfBlock, cosine, sine } = stages[stageIndex];
 
     for (let blockStart = 0; blockStart < size; blockStart += blockSize) {
       for (let offset = 0; offset < halfBlock; offset += 1) {
-        const angle = phaseStep * offset;
-        const cosine = Math.cos(angle);
-        const sine = Math.sin(angle);
         const evenIndex = blockStart + offset;
         const oddIndex = evenIndex + halfBlock;
         const oddReal =
-          real[oddIndex] * cosine - imaginary[oddIndex] * sine;
+          real[oddIndex] * cosine[offset] -
+          imaginary[oddIndex] * sine[offset];
         const oddImaginary =
-          real[oddIndex] * sine + imaginary[oddIndex] * cosine;
+          real[oddIndex] * sine[offset] +
+          imaginary[oddIndex] * cosine[offset];
+        const evenReal = real[evenIndex];
+        const evenImaginary = imaginary[evenIndex];
 
-        real[oddIndex] = real[evenIndex] - oddReal;
-        imaginary[oddIndex] = imaginary[evenIndex] - oddImaginary;
-        real[evenIndex] += oddReal;
-        imaginary[evenIndex] += oddImaginary;
+        real[oddIndex] = evenReal - oddReal;
+        imaginary[oddIndex] = evenImaginary - oddImaginary;
+        real[evenIndex] = evenReal + oddReal;
+        imaginary[evenIndex] = evenImaginary + oddImaginary;
       }
     }
   }
-
-  const magnitudes = new Float32Array(size / 2 + 1);
-  for (let index = 0; index < magnitudes.length; index += 1) {
-    magnitudes[index] = Math.hypot(real[index], imaginary[index]);
-  }
-  return magnitudes;
 }
 
-function mixToMono(audioBuffer) {
-  const mono = new Float32Array(audioBuffer.length);
+function createFrequencyBinPositions(
+  pointCount,
+  maximumFrequencyHz,
+  sampleRate,
+  fftSize
+) {
+  const positions = new Float64Array(pointCount);
+  const maximumBin = fftSize / 2;
 
-  for (
-    let channelIndex = 0;
-    channelIndex < audioBuffer.numberOfChannels;
-    channelIndex += 1
-  ) {
-    const channel = audioBuffer.getChannelData(channelIndex);
-    for (let sampleIndex = 0; sampleIndex < audioBuffer.length; sampleIndex += 1) {
-      mono[sampleIndex] += channel[sampleIndex] / audioBuffer.numberOfChannels;
-    }
+  for (let index = 0; index < pointCount; index += 1) {
+    const amount = pointCount <= 1 ? 0 : index / (pointCount - 1);
+    const frequencyHz = logarithmicFrequencyAtPosition(
+      amount,
+      maximumFrequencyHz
+    );
+    positions[index] = clamp(
+      (frequencyHz * fftSize) / sampleRate,
+      0,
+      maximumBin
+    );
   }
 
-  return mono;
+  return positions;
+}
+
+function sampleFftMagnitude(real, imaginary, binPosition) {
+  const maximumBin = real.length / 2;
+  const lowerBin = Math.floor(clamp(binPosition, 0, maximumBin));
+  const upperBin = Math.min(maximumBin, lowerBin + 1);
+  const amount = binPosition - lowerBin;
+  const lowerMagnitude = Math.sqrt(
+    real[lowerBin] * real[lowerBin] +
+    imaginary[lowerBin] * imaginary[lowerBin]
+  );
+
+  if (upperBin === lowerBin) return lowerMagnitude;
+
+  const upperMagnitude = Math.sqrt(
+    real[upperBin] * real[upperBin] +
+    imaginary[upperBin] * imaginary[upperBin]
+  );
+  return lowerMagnitude + (upperMagnitude - lowerMagnitude) * amount;
 }
 
 function smoothHeightMap(
@@ -151,27 +234,6 @@ function smoothHeightMap(
   return smoothed;
 }
 
-function sampleMagnitudeAtFrequency(
-  magnitudes,
-  frequencyHz,
-  sampleRate,
-  fftSize
-) {
-  const maximumBin = magnitudes.length - 1;
-  const binPosition = clamp(
-    (frequencyHz * fftSize) / sampleRate,
-    0,
-    maximumBin
-  );
-  const lowerBin = Math.floor(binPosition);
-  const upperBin = Math.min(maximumBin, lowerBin + 1);
-  const amount = binPosition - lowerBin;
-  return (
-    magnitudes[lowerBin] +
-    (magnitudes[upperBin] - magnitudes[lowerBin]) * amount
-  );
-}
-
 function logarithmicFrequencyAtPosition(amount, maximumFrequencyHz) {
   const maximumFrequency = Math.max(
     FREQUENCY_GRAPH_MIN_HZ,
@@ -208,11 +270,28 @@ export async function analyzeAudio(audioBuffer, fftSize, options = {}) {
 
   assertNotCancelled();
   reportProgress(0.02, "Preparing frequency analysis…");
-  const mono = mixToMono(audioBuffer);
+  const channels = Array.from(
+    { length: audioBuffer.numberOfChannels },
+    (_, channelIndex) => audioBuffer.getChannelData(channelIndex)
+  );
+  const channelScale = 1 / Math.max(1, channels.length);
   const halfWindow = fftSize / 2;
+  const fftWorkspace = createFftWorkspace(fftSize);
   const maximumAnalyzedFrequency = Math.min(
     FREQUENCY_GRAPH_MAX_HZ,
     audioBuffer.sampleRate * 0.5
+  );
+  const terrainBinPositions = createFrequencyBinPositions(
+    FREQUENCY_POINT_COUNT,
+    maximumAnalyzedFrequency,
+    audioBuffer.sampleRate,
+    fftSize
+  );
+  const graphBinPositions = createFrequencyBinPositions(
+    FREQUENCY_GRAPH_POINT_COUNT,
+    maximumAnalyzedFrequency,
+    audioBuffer.sampleRate,
+    fftSize
   );
   const analysisFrameCount = Math.min(
     MAX_ANALYSIS_FRAMES,
@@ -239,20 +318,17 @@ export async function analyzeAudio(audioBuffer, fftSize, options = {}) {
         ? 0
         : timeIndex / (analysisFrameCount - 1);
     const centerSample = Math.round(
-      progress * Math.max(0, mono.length - 1)
+      progress * Math.max(0, audioBuffer.length - 1)
     );
     const frameStart = centerSample - halfWindow;
-    const frame = new Float32Array(fftSize);
 
-    for (let sampleOffset = 0; sampleOffset < fftSize; sampleOffset += 1) {
-      const sourceIndex = frameStart + sampleOffset;
-      frame[sampleOffset] =
-        sourceIndex >= 0 && sourceIndex < mono.length
-          ? mono[sourceIndex]
-          : 0;
-    }
-
-    const magnitudes = fftMagnitudes(frame);
+    fillFftInput(
+      fftWorkspace,
+      channels,
+      channelScale,
+      frameStart
+    );
+    runFft(fftWorkspace);
 
     // Sample the terrain across the same logarithmic frequency axis as
     // the top-right graph. Equal horizontal mesh distances now represent
@@ -263,17 +339,10 @@ export async function analyzeAudio(audioBuffer, fftSize, options = {}) {
       frequencyIndex < FREQUENCY_POINT_COUNT;
       frequencyIndex += 1
     ) {
-      const amount =
-        frequencyIndex / (FREQUENCY_POINT_COUNT - 1);
-      const frequencyHz = logarithmicFrequencyAtPosition(
-        amount,
-        maximumAnalyzedFrequency
-      );
-      const magnitude = sampleMagnitudeAtFrequency(
-        magnitudes,
-        frequencyHz,
-        audioBuffer.sampleRate,
-        fftSize
+      const magnitude = sampleFftMagnitude(
+        fftWorkspace.real,
+        fftWorkspace.imaginary,
+        terrainBinPositions[frequencyIndex]
       );
       const db = 20 * Math.log10(Math.max(magnitude, 1e-12));
       rawDb[timeIndex][frequencyIndex] = db;
@@ -288,16 +357,10 @@ export async function analyzeAudio(audioBuffer, fftSize, options = {}) {
       graphIndex < FREQUENCY_GRAPH_POINT_COUNT;
       graphIndex += 1
     ) {
-      const amount = graphIndex / (FREQUENCY_GRAPH_POINT_COUNT - 1);
-      const frequencyHz = logarithmicFrequencyAtPosition(
-        amount,
-        maximumAnalyzedFrequency
-      );
-      const magnitude = sampleMagnitudeAtFrequency(
-        magnitudes,
-        frequencyHz,
-        audioBuffer.sampleRate,
-        fftSize
+      const magnitude = sampleFftMagnitude(
+        fftWorkspace.real,
+        fftWorkspace.imaginary,
+        graphBinPositions[graphIndex]
       );
       const db = 20 * Math.log10(Math.max(magnitude, 1e-12));
       rawFrequencyGraphDb[timeIndex][graphIndex] = db;
