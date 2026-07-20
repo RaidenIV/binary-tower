@@ -162,6 +162,9 @@ export function resetVisualizerToDefaults() {
 
   resetHistory();
   fitViewport();
+  document.querySelectorAll(".section-reset").forEach((button) => {
+    button.disabled = true;
+  });
   setStatus("IDLE / DROP AUDIO TO BEGIN");
   markRenderDirty();
 }
@@ -385,22 +388,72 @@ function resetExportSectionToDefaults() {
 }
 
 export function initializeSectionResetButtons() {
+  const runSectionReset = (section) => {
+    if (section === "playback") resetPlaybackSectionToDefaults();
+    else if (section === "loop") resetLoopSectionToDefaults();
+    else if (section === "viewport") resetViewportSectionToDefaults();
+    else if (section === "audio-mesh") resetAudioMeshSectionToDefaults();
+    else if (section === "transform") resetTransformSectionToDefaults();
+    else if (section === "binary") resetBinarySectionToDefaults();
+    else if (section === "appearance") resetAppearanceSectionToDefaults();
+    else if (section === "gui") resetGuiSectionToDefaults();
+    else if (section === "visualization") resetVisualizationSectionToDefaults();
+    else if (section === "export-format") resetExportFormatSectionToDefaults();
+    else if (section === "export") resetExportSectionToDefaults();
+  };
+
   document.querySelectorAll(".section-reset").forEach((button) => {
+    // Move the reset control so it sits immediately after the section title
+    // instead of at the far right of the header.
+    const header = button.closest(".collapsible-header");
+    const title = header ? header.querySelector("h2, h3") : null;
+    if (title) title.insertAdjacentElement("afterend", button);
+
+    // A section with no user changes has nothing to reset, so start inactive.
+    button.disabled = true;
+
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      const section = button.dataset.resetSection;
-      if (section === "playback") resetPlaybackSectionToDefaults();
-      if (section === "loop") resetLoopSectionToDefaults();
-      if (section === "viewport") resetViewportSectionToDefaults();
-      if (section === "audio-mesh") resetAudioMeshSectionToDefaults();
-      if (section === "transform") resetTransformSectionToDefaults();
-      if (section === "binary") resetBinarySectionToDefaults();
-      if (section === "appearance") resetAppearanceSectionToDefaults();
-      if (section === "gui") resetGuiSectionToDefaults();
-      if (section === "visualization") resetVisualizationSectionToDefaults();
-      if (section === "export-format") resetExportFormatSectionToDefaults();
-      if (section === "export") resetExportSectionToDefaults();
+      if (button.disabled) return;
+      runSectionReset(button.dataset.resetSection);
+      button.disabled = true;
     });
   });
+
+  // Activate a section's reset control the first time the user edits one of
+  // its controls. Genuine user input is trusted; the synthetic events fired by
+  // the reset routines and the auto-rotate loop are not, so they never mark a
+  // section as changed.
+  const panel = document.querySelector(".panel") || document.body;
+
+  const markSectionChanged = (node) => {
+    const owner = node.closest
+      ? node.closest(".section, .control-cluster")
+      : null;
+    if (!owner) return;
+    const resetButton = owner.querySelector(
+      ":scope > .collapsible-header .section-reset"
+    );
+    if (resetButton && resetButton.dataset.resetSection) {
+      resetButton.disabled = false;
+    }
+  };
+
+  const onUserEdit = (event) => {
+    if (!event.isTrusted || !(event.target instanceof Element)) return;
+    markSectionChanged(event.target);
+  };
+
+  panel.addEventListener("input", onUserEdit, true);
+  panel.addEventListener("change", onUserEdit, true);
+  panel.addEventListener(
+    "click",
+    (event) => {
+      if (!event.isTrusted || !(event.target instanceof Element)) return;
+      const stepper = event.target.closest(".value-stepper");
+      if (stepper) markSectionChanged(stepper);
+    },
+    true
+  );
 }

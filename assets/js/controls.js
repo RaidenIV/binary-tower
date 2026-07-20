@@ -184,7 +184,7 @@ export function enhanceValueEditors() {
     incrementButton.setAttribute("aria-label", `Increase ${label}`);
     incrementButton.title = `Increase ${label}`;
 
-    editor.insertBefore(decrementButton, valueInput);
+    editor.appendChild(decrementButton);
     editor.appendChild(incrementButton);
     editor.dataset.enhanced = "true";
 
