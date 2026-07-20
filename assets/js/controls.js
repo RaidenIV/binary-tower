@@ -196,8 +196,6 @@ export function enhanceValueEditors() {
       }
       valueInput.dispatchEvent(new Event("input", { bubbles: true }));
       valueInput.dispatchEvent(new Event("change", { bubbles: true }));
-      valueInput.focus({ preventScroll: true });
-      valueInput.select();
     };
 
     decrementButton.addEventListener("click", () => stepValue(-1));
